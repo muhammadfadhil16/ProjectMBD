@@ -1,32 +1,62 @@
 <?php
 include('dbcon.php');
+session_start();
 
-// Query untuk mengambil semua ruangan yang tersedia
-$query = "SELECT * FROM ruangan WHERE tersedia = 1";
-$result = mysqli_query($connection, $query);
+// Mengecek apakah pengguna sudah login
+if (!isset($_SESSION['user_id'])) {
+    header('Location: index.php');
+    exit();
+}
 
+// Validasi Form pada Sisi Server (PHP)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     if (isset($_POST['room_id'])) {
         $roomID = $_POST['room_id'];
 
-        // Perbarui status tersedia ruangan
-        $updateQuery = "UPDATE ruangan SET tersedia = 0 WHERE id_ruangan = ?";
-        $stmt = mysqli_prepare($connection, $updateQuery);
-        mysqli_stmt_bind_param($stmt, 'i', $roomID);
-        mysqli_stmt_execute($stmt);
+        // Query untuk memeriksa ketersediaan ruangan
+        $checkAvailabilityQuery = "SELECT tersedia FROM ruangan WHERE id_ruangan = ?";
+        $stmtCheck = mysqli_prepare($connection, $checkAvailabilityQuery);
+        mysqli_stmt_bind_param($stmtCheck, 'i', $roomID);
+        mysqli_stmt_execute($stmtCheck);
+        $resultCheck = mysqli_stmt_get_result($stmtCheck);
+        $rowCheck = mysqli_fetch_assoc($resultCheck);
 
-        if (mysqli_stmt_affected_rows($stmt) > 0) {
-            echo "Room booked successfully with ID: $roomID";
+        if ($rowCheck && $rowCheck['tersedia'] == '1') {
+            $userID = $_SESSION['user_id'];
+
+            // Perbarui status tersedia ruangan
+            $updateQuery = "UPDATE ruangan SET tersedia = 0 WHERE id_ruangan = ?";
+            $stmtUpdate = mysqli_prepare($connection, $updateQuery);
+            mysqli_stmt_bind_param($stmtUpdate, 'i', $roomID);
+            mysqli_stmt_execute($stmtUpdate);
+
+            // Insert peminjaman ke database
+            $insertQuery = "INSERT INTO Peminjaman (id_ruangan, id_user, tanggal_peminjaman, jam_mulai, jam_selesai, keperluan) VALUES (?, ?, CURDATE(), '09:00:00', '11:00:00', 'Keperluan mahasiswa')";
+            $stmtInsert = mysqli_prepare($connection, $insertQuery);
+            mysqli_stmt_bind_param($stmtInsert, 'ii', $roomID, $userID);
+            mysqli_stmt_execute($stmtInsert);
+
+            if (mysqli_stmt_affected_rows($stmtInsert) > 0) {
+                echo "Ruangan berhasil dipesan dengan ID: $roomID pada tanggal ini.";
+            } else {
+                echo "Gagal memesan ruangan. Silakan coba lagi.";
+            }
+
+            mysqli_stmt_close($stmtUpdate);
+            mysqli_stmt_close($stmtInsert);
         } else {
-            echo "Failed to update room availability.";
+            echo "Ruangan tidak tersedia.";
         }
 
-        mysqli_stmt_close($stmt);
+        mysqli_stmt_close($stmtCheck);
     } else {
-        echo "No room selected.";
+        echo "Pilihan ruangan tidak valid.";
     }
 }
 
+// Query untuk mengambil semua ruangan yang tersedia
+$query = "SELECT * FROM ruangan WHERE tersedia = 1";
+$result = mysqli_query($connection, $query);
 ?>
 
 <!DOCTYPE html>
@@ -35,33 +65,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Bookings</title>
+    <link rel="stylesheet" href="style.css"> <!-- Link ke file CSS Anda -->
 </head>
 <body>
-    <?php
-    if (mysqli_num_rows($result) > 0) {
-        echo "<h1>Available Rooms</h1>";
-        echo "<form action='' method='POST'>";
-        echo "<table border='1'>
-                <tr>
-                    <th>ID Ruangan</th>
-                    <th>Nama Ruangan</th>
-                    <th>Kapasitas</th>
-                    <th>Action</th>
-                </tr>";
-        while ($row = mysqli_fetch_assoc($result)) {
-            echo "<tr>
-                    <td>{$row['id_ruangan']}</td>
-                    <td>{$row['nama_ruangan']}</td>
-                    <td>{$row['kapasitas']}</td>
-                    <td><input type='radio' name='room_id' value='{$row['id_ruangan']}' required></td>
-                  </tr>";
-        }
-        echo "</table>";
-        echo "<input type='submit' name='submit' value='Book Room'>";
-        echo "</form>";
-    } else {
-        echo "No available rooms found.";
-    }
-    ?>
+    <h1>Book a Room</h1>
+    <form method="POST">
+        <label for="room">Select a room:</label>
+        <select name="room_id" id="room" required>
+            <?php while ($row = mysqli_fetch_assoc($result)) { ?>
+                <option value="<?php echo $row['id_ruangan']; ?>">
+                    <?php echo $row['nama_ruangan']; ?>
+                </option>
+            <?php } ?>
+        </select>
+        <button type="submit" name="submit">Book Room</button>
+    </form>
 </body>
 </html>
+
+<?php mysqli_close($connection); ?>

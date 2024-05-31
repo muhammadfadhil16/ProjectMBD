@@ -10,10 +10,10 @@ CREATE TABLE ruangan (
 -- Membuat Tabel User
 CREATE TABLE User (
     id_user INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM('mahasiswa', 'admin') NOT NULL,
-    INDEX idx_username (username)
+    INDEX idx_NIM (email)
 );
 
 -- Membuat Tabel Peminjaman
@@ -65,3 +65,4 @@ VALUES
   ('D03', 50),
   ('D04', 50),
   ('D05', 50);
+
